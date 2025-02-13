@@ -1,103 +1,61 @@
 library(shiny)
 library(ape)
-library(Biostrings)
-library(ggtree)
 
-# Define UI for the app
+# Define the UI
 ui <- fluidPage(
-  titlePanel("Phylogenetic Tree Viewer"),
+  titlePanel("DNA Trees"),
   
   sidebarLayout(
     sidebarPanel(
-      selectInput("fasta_choice", 
-                  "Choose a FASTA File:", 
-                  choices = c("Spike Protein" = "www/AlignedSpikeProteins.fa", 
-                              "Example File" = "www/example.fasta",
-                              "Upload Your Own File")),
-      fileInput("fasta_file", "Upload FASTA File (if selected above)", 
-                accept = c(".fasta", ".fa", ".faa")),
-      actionButton("generate_tree", "Generate Phylogenetic Tree"),
-      hr(),
-      helpText("Select a preloaded FASTA file or upload your own to calculate and visualize the phylogenetic tree.")
+      selectInput(
+        inputId = "fasta_file",
+        label = "Choose an aligned FASTA file:",
+        choices = list(
+          "FiveSpecies" = "FiveSpecies_Simple.fasta",
+          "SpikeProteins" = "AlignedSpikeProteins.fa"
+        )
+      ),
+      actionButton("generate", "Generate Tree"),
+      helpText(
+        "Each option is a fasta file containing DNA Sequence data.  The DNA sequence data allows us to visualise relationships among samples. The first is among five species.  The second is among real covid19 samples."
+      )
     ),
     
     mainPanel(
-      tabsetPanel(
-        tabPanel("APE Tree Visualization",
-                 plotOutput("ape_tree_plot", height = "600px")  # Increase height
-        ),
-        tabPanel("GGTREE Visualization",
-                 plotOutput("ggtree_plot", height = "600px")  # Consistent height
-        )
-      )
+      plotOutput("tree_plot", height = "600px"), # Adjusted height for larger trees
+      verbatimTextOutput("status")
     )
   )
 )
 
-# Define server logic
+# Define the server
 server <- function(input, output, session) {
-  # Add resource paths for embedded FASTA files
-  addResourcePath("files", "www")
-  
-  # Reactive to determine the FASTA file path
-  fasta_path <- reactive({
-    if (input$fasta_choice == "Upload Your Own File") {
-      req(input$fasta_file)  # Ensure a file is uploaded
-      return(input$fasta_file$datapath)
-    } else {
-      # Use the selected preloaded FASTA file
-      return(input$fasta_choice)
-    }
-  })
-  
-  # Reactive value to store the tree
-  tree_data <- reactiveVal(NULL)
-  
-  # Generate the phylogenetic tree
-  observeEvent(input$generate_tree, {
-    req(fasta_path())  # Ensure a valid file path
+  observeEvent(input$generate, {
+    # Ensure a valid file is selected
+    req(input$fasta_file)
     
-    # Read the DNA sequences from the FASTA file
-    sequences <- readDNAStringSet(fasta_path())
+    # File path in the 'www' directory
+    file_path <- file.path("www", input$fasta_file)
     
-    # Pairwise distance matrix (using pairwise alignment with Hamming distance)
-    dist_matrix <- dist.dna(as.DNAbin(sequences), model = "raw", pairwise.deletion = TRUE)
-    
-    # Build a phylogenetic tree using the Neighbor-Joining method
-    tree <- nj(dist_matrix)
-    tree_data(tree)
-  })
-  
-  # APE Tree Plot
-  output$ape_tree_plot <- renderPlot({
-    req(tree_data())
-    
-    # Ladderize the tree for cleaner visualization
-    ladderized_tree <- ladderize(tree_data())
-    
-    # Calculate vertical limits
-    num_tips <- length(ladderized_tree$tip.label)
-    vertical_space <- num_tips * 1.2
-    
-    # Plot the tree
-    plot.phylo(ladderized_tree, 
-               main = paste("Phylogenetic Tree (", input$tree_method, ")", sep = ""),
-               cex = 0.8,
-               y.lim = c(0, vertical_space),
-               no.margin = TRUE)
-  })
-  
-  
-  # GGTREE Visualization
-  output$ggtree_plot <- renderPlot({
-    req(tree_data())
-    
-    ggtree(tree_data()) + 
-      geom_tiplab() + 
-      theme_tree2() + 
-      ggplot2::labs(title = paste("Phylogenetic Tree (", input$tree_method, ")", sep = ""))
+    # Read the aligned sequences and compute the tree
+    tryCatch({
+      aligned_sequences <- read.dna(file_path, format = "fasta")
+      dist_matrix <- dist.dna(aligned_sequences, model = "JC69")
+      phylo_tree <- nj(dist_matrix)
+      
+      # Render the tree plot
+      output$tree_plot <- renderPlot({
+        plot(phylo_tree, main = paste("Phylogenetic Tree for", input$fasta_file))
+      })
+      
+      # Display status
+      output$status <- renderText("Tree generated successfully!")
+    }, error = function(e) {
+      output$status <- renderText(paste("Error:", e$message))
+      output$tree_plot <- renderPlot(NULL)  # Clear the plot in case of error
+    })
   })
 }
 
-# Run the application
+# Run the app
 shinyApp(ui = ui, server = server)
