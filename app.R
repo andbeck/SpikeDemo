@@ -17,11 +17,21 @@ ui <- fluidPage(
       ),
       actionButton("generate", "Generate Tree"),
       helpText(
-        "Each option is a fasta file containing DNA Sequence data.  The DNA sequence data allows us to visualise relationships among samples. The first is among five species.  The second is among real covid19 samples."
+        "Start with the Five Species, then choose the Spike Protein"
       )
     ),
     
     mainPanel(
+      strong("Identify the Relationships"),
+      p("The DNA sequencea data allows us to visualise relationships among samples"),
+      p("There are two types of changes among species or individuals.  First, the letter can change at the same position"),
+      p("Second, there can be changes at more than one position"),
+      hr(),
+      code("Five Species"),
+      p("Note the single change of letter between AACAA, AATAA and AAAAA; then note how AACAA and AACGA are different.  Finally, note how AACAA and AATTA are the most different"),
+      hr(),
+      code("Spike Protein"),
+      p("Note how all the Covid-19 sequences are identical. Then note how the SARS and MERS are different from Covid; Note also that the Bats are different too"),
       plotOutput("tree_plot", height = "600px"), # Adjusted height for larger trees
       verbatimTextOutput("status")
     )
@@ -45,7 +55,7 @@ server <- function(input, output, session) {
       
       # Render the tree plot
       output$tree_plot <- renderPlot({
-        plot(phylo_tree, main = paste("Phylogenetic Tree for", input$fasta_file))
+        plot(phylo_tree, main = paste("Phylogenetic Tree for", input$fasta_file), cex = 1.2)
       })
       
       # Display status
